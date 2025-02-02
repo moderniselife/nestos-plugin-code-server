@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/armv7/armhf-ubuntu
+FROM armv7/armhf-ubuntu
 
 # set version label
 ARG BUILD_DATE
