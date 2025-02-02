@@ -3,14 +3,14 @@ name: Build and Push to GHCR
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - 'Dockerfile*'
       - 'root/**'
       - '.github/workflows/docker-build.yml'
   pull_request:
     branches:
-      - main
+      - master
     paths:
       - 'Dockerfile*'
       - 'root/**'
