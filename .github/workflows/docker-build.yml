@@ -75,7 +75,7 @@ jobs:
           file: Dockerfile.aarch64
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}-build-aarch64
+          tags: ${{ steps.meta.outputs.tags }}-aarch64
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -87,7 +87,7 @@ jobs:
           file: Dockerfile.armv7
           platforms: linux/arm/v7
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}-build-armv7
+          tags: ${{ steps.meta.outputs.tags }}-armv7
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -95,15 +95,17 @@ jobs:
       - name: Create and push manifest
         if: github.event_name != 'pull_request'
         run: |
-          for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr '\n' ' '); do
+          # Read tags into array and process each one
+          IFS=$'\n' read -r -d '' -a tags < <(echo "${{ steps.meta.outputs.tags }}")
+          for tag in "${tags[@]}"; do
             # Create manifest list
-            docker buildx imagetools create -t ${tag} \
-              ${tag}-amd64 \
-              ${tag}-build-aarch64 \
-              ${tag}-build-armv7
+            docker buildx imagetools create -t "${tag}" \
+              "${tag}-amd64" \
+              "${tag}-aarch64" \
+              "${tag}-armv7"
 
             # Remove build tags
-            docker buildx imagetools rm ${tag}-amd64
-            docker buildx imagetools rm ${tag}-build-aarch64
-            docker buildx imagetools rm ${tag}-build-armv7
+            docker buildx imagetools rm "${tag}-amd64"
+            docker buildx imagetools rm "${tag}-aarch64"
+            docker buildx imagetools rm "${tag}-armv7"
           done
