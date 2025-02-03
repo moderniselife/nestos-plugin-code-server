@@ -95,17 +95,35 @@ jobs:
       - name: Create and push manifest
         if: github.event_name != 'pull_request'
         run: |
+          # Debug: List available images
+          echo "Available images:"
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:master || true
+          
           # Read tags into array and process each one
           IFS=$'\n' read -r -d '' -a tags < <(echo "${{ steps.meta.outputs.tags }}")
           for tag in "${tags[@]}"; do
+            echo "Processing tag: ${tag}"
+            
+            # Debug: Check if images exist
+            echo "Checking for AMD64 image:"
+            docker buildx imagetools inspect "${tag}-amd64" || true
+            echo "Checking for AARCH64 image:"
+            docker buildx imagetools inspect "${tag}-build-aarch64" || true
+            echo "Checking for ARMV7 image:"
+            docker buildx imagetools inspect "${tag}-build-armv7" || true
+            
             # Create manifest list
+            echo "Creating manifest for ${tag}"
             docker buildx imagetools create -t "${tag}" \
               "${tag}-amd64" \
-              "${tag}-aarch64" \
-              "${tag}-armv7"
+              "${tag}-build-aarch64" \
+              "${tag}-build-armv7" || echo "Failed to create manifest for ${tag}"
 
-            # Remove build tags
-            docker buildx imagetools rm "${tag}-amd64"
-            docker buildx imagetools rm "${tag}-aarch64"
-            docker buildx imagetools rm "${tag}-armv7"
+            # Remove build tags only if manifest creation was successful
+            if docker buildx imagetools inspect "${tag}"; then
+              echo "Removing build tags for ${tag}"
+              docker buildx imagetools rm "${tag}-amd64" || true
+              docker buildx imagetools rm "${tag}-build-aarch64" || true
+              docker buildx imagetools rm "${tag}-build-armv7" || true
+            fi
           done
