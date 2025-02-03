@@ -1,7 +1,7 @@
 version: "3"
 services:
   code-server:
-    image: ghcr.io/moderniselife/nestos-plugin-code-server:sha-de9d4b349d622fcb298f6a75df452cbfa38b3bf9-armv7
+    image: ghcr.io/moderniselife/nestos-plugin-code-server:master
     container_name: vscode-server
     restart: unless-stopped
     environment:
