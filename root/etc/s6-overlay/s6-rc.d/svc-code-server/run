@@ -1,10 +1,30 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-exec 1> >(tee -a /config/code-server.log)
-exec 2> >(tee -a /config/code-server.log >&2)
+mkdir -p /config/logs
+exec 1> >(tee -a /config/logs/code-server.log)
+exec 2> >(tee -a /config/logs/code-server.log >&2)
 
 echo "[$(date)] Starting code-server service"
+
+# Check if code-server binary exists
+if [[ ! -f /app/code-server/bin/code-server ]]; then
+    echo "[$(date)] ERROR: code-server binary not found at /app/code-server/bin/code-server"
+    exit 1
+fi
+
+# Check if config directories exist and are writable
+for dir in "/config/data" "/config/extensions" "/workspace"; do
+    if [[ ! -d "$dir" ]]; then
+        echo "[$(date)] ERROR: Directory $dir does not exist"
+        exit 1
+    fi
+    if [[ ! -w "$dir" ]]; then
+        echo "[$(date)] ERROR: Directory $dir is not writable"
+        ls -la "$dir"
+        exit 1
+    fi
+done
 
 if [[ -n "${PASSWORD}" ]] || [[ -n "${HASHED_PASSWORD}" ]]; then
     AUTH="password"
@@ -22,9 +42,11 @@ else
     echo "[$(date)] Using proxy domain: ${PROXY_DOMAIN}"
 fi
 
-echo "[$(date)] Checking directory permissions..."
+echo "[$(date)] System Information:"
+echo "User running process: $(whoami)"
+echo "Current working directory: $(pwd)"
+echo "Directory permissions:"
 ls -la /config/
-echo "[$(date)] Checking workspace directory..."
 ls -la /workspace/
 
 echo "[$(date)] Starting code-server with following configuration:"
@@ -35,6 +57,13 @@ echo "- Auth mode: ${AUTH}"
 echo "- Proxy domain arg: ${PROXY_DOMAIN_ARG}"
 echo "- Default workspace: ${DEFAULT_WORKSPACE:-/config/workspace}"
 
+# Test if port is already in use
+if nc -z 127.0.0.1 8443 2>/dev/null; then
+    echo "[$(date)] ERROR: Port 8443 is already in use"
+    netstat -tulpn | grep 8443
+    exit 1
+fi
+
 exec \
     s6-notifyoncheck -d -n 300 -w 1000 -c "nc -z 127.0.0.1 8443" \
         s6-setuidgid abc \
@@ -44,5 +73,6 @@ exec \
                 --extensions-dir /config/extensions \
                 --disable-telemetry \
                 --auth "${AUTH}" \
+                --verbose \
                 "${PROXY_DOMAIN_ARG}" \
                 "${DEFAULT_WORKSPACE:-/config/workspace}"

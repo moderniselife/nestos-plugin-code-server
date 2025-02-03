@@ -1,41 +1,63 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-exec 1> >(tee -a /config/init.log)
-exec 2> >(tee -a /config/init.log >&2)
+mkdir -p /config/logs
+exec 1> >(tee -a /config/logs/init.log)
+exec 2> >(tee -a /config/logs/init.log >&2)
 
 echo "[$(date)] Starting initialization..."
+echo "[$(date)] Running as user: $(whoami)"
+echo "[$(date)] Current directory: $(pwd)"
 
 echo "[$(date)] Creating required directories..."
-mkdir -p /config/{extensions,data,workspace,.ssh}
-mkdir -p /workspace
+for dir in "/config/extensions" "/config/data" "/config/workspace" "/config/.ssh" "/workspace"; do
+    if ! mkdir -p "$dir"; then
+        echo "[$(date)] ERROR: Failed to create directory: $dir"
+        exit 1
+    fi
+done
 
 echo "[$(date)] Setting up sudo access if configured..."
 if [[ -n "${SUDO_PASSWORD}" ]] || [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
     echo "[$(date)] Setting up sudo access"
     if ! grep -q 'abc' /etc/sudoers; then
         echo "[$(date)] Adding abc to sudoers"
-        echo "abc ALL=(ALL:ALL) ALL" >> /etc/sudoers
+        if ! echo "abc ALL=(ALL:ALL) ALL" >> /etc/sudoers; then
+            echo "[$(date)] ERROR: Failed to modify sudoers file"
+            exit 1
+        fi
     fi
     if [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
         echo "[$(date)] Setting sudo password using sudo password hash"
-        sed -i "s|^abc:\!:|abc:${SUDO_PASSWORD_HASH}:|" /etc/shadow
+        if ! sed -i "s|^abc:\!:|abc:${SUDO_PASSWORD_HASH}:|" /etc/shadow; then
+            echo "[$(date)] ERROR: Failed to set password hash"
+            exit 1
+        fi
     else
         echo "[$(date)] Setting sudo password using SUDO_PASSWORD env var"
-        echo -e "${SUDO_PASSWORD}\n${SUDO_PASSWORD}" | passwd abc
+        if ! echo -e "${SUDO_PASSWORD}\n${SUDO_PASSWORD}" | passwd abc; then
+            echo "[$(date)] ERROR: Failed to set password"
+            exit 1
+        fi
     fi
 fi
 
 echo "[$(date)] Setting up shell configuration..."
 if [[ ! -f /config/.bashrc ]]; then
-    cp /root/.bashrc /config/.bashrc
+    if ! cp /root/.bashrc /config/.bashrc; then
+        echo "[$(date)] ERROR: Failed to copy .bashrc"
+        exit 1
+    fi
 fi
 
 if [[ ! -f /config/.profile ]]; then
-    cp /root/.profile /config/.profile
+    if ! cp /root/.profile /config/.profile; then
+        echo "[$(date)] ERROR: Failed to copy .profile"
+        exit 1
+    fi
 fi
 
-# fix permissions (ignore contents of workspace)
+# fix permissions
 PUID=${PUID:-911}
 echo "[$(date)] Checking ownership of files..."
 echo "[$(date)] Expected PUID: ${PUID}"
@@ -44,17 +66,37 @@ echo "[$(date)] Current ownership of /config/.profile: $(stat -c %u /config/.pro
 if [[ ! "$(stat -c %u /config/.profile)" == "${PUID}" ]]; then
     echo "[$(date)] Change in ownership detected, updating file permissions..."
     echo "[$(date)] This could take some time"
-    find /config -path "/config/workspace" -prune -o -exec lsiown abc:abc {} +
-    lsiown abc:abc /config/workspace
-    lsiown -R abc:abc /workspace
+    
+    # Set ownership of config directory
+    if ! find /config -path "/config/workspace" -prune -o -exec lsiown abc:abc {} +; then
+        echo "[$(date)] ERROR: Failed to set ownership of config files"
+        exit 1
+    fi
+    
+    # Set ownership of workspace directories
+    if ! lsiown abc:abc /config/workspace; then
+        echo "[$(date)] ERROR: Failed to set ownership of config workspace"
+        exit 1
+    fi
+    if ! lsiown -R abc:abc /workspace; then
+        echo "[$(date)] ERROR: Failed to set ownership of workspace"
+        exit 1
+    fi
 fi
 
 echo "[$(date)] Setting SSH directory permissions..."
-chmod 700 /config/.ssh
+if ! chmod 700 /config/.ssh; then
+    echo "[$(date)] ERROR: Failed to set SSH directory permissions"
+    exit 1
+fi
+
 if [[ -n "$(ls -A /config/.ssh)" ]]; then
-    find /config/.ssh/ -type d -exec chmod 700 '{}' \;
-    find /config/.ssh/ -type f -exec chmod 600 '{}' \;
-    find /config/.ssh/ -type f -iname '*.pub' -exec chmod 644 '{}' \;
+    if ! find /config/.ssh/ -type d -exec chmod 700 '{}' \; || \
+       ! find /config/.ssh/ -type f -exec chmod 600 '{}' \; || \
+       ! find /config/.ssh/ -type f -iname '*.pub' -exec chmod 644 '{}' \;; then
+        echo "[$(date)] ERROR: Failed to set SSH file permissions"
+        exit 1
+    fi
 fi
 
 echo "[$(date)] Final permission check..."
@@ -62,5 +104,14 @@ echo "Config directory permissions:"
 ls -la /config/
 echo "Workspace directory permissions:"
 ls -la /workspace/
+
+echo "[$(date)] Environment variables:"
+env | grep -v PASSWORD
+
+echo "[$(date)] Disk space:"
+df -h
+
+echo "[$(date)] Memory usage:"
+free -h
 
 echo "[$(date)] Initialization complete."
