@@ -1,23 +1,32 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-mkdir -p /config/{extensions,data,workspace,.ssh}
+exec 1> >(tee -a /config/init.log)
+exec 2> >(tee -a /config/init.log >&2)
 
+echo "[$(date)] Starting initialization..."
+
+echo "[$(date)] Creating required directories..."
+mkdir -p /config/{extensions,data,workspace,.ssh}
+mkdir -p /workspace
+
+echo "[$(date)] Setting up sudo access if configured..."
 if [[ -n "${SUDO_PASSWORD}" ]] || [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
-    echo "setting up sudo access"
+    echo "[$(date)] Setting up sudo access"
     if ! grep -q 'abc' /etc/sudoers; then
-        echo "adding abc to sudoers"
+        echo "[$(date)] Adding abc to sudoers"
         echo "abc ALL=(ALL:ALL) ALL" >> /etc/sudoers
     fi
     if [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
-        echo "setting sudo password using sudo password hash"
+        echo "[$(date)] Setting sudo password using sudo password hash"
         sed -i "s|^abc:\!:|abc:${SUDO_PASSWORD_HASH}:|" /etc/shadow
     else
-        echo "setting sudo password using SUDO_PASSWORD env var"
+        echo "[$(date)] Setting sudo password using SUDO_PASSWORD env var"
         echo -e "${SUDO_PASSWORD}\n${SUDO_PASSWORD}" | passwd abc
     fi
 fi
 
+echo "[$(date)] Setting up shell configuration..."
 if [[ ! -f /config/.bashrc ]]; then
     cp /root/.bashrc /config/.bashrc
 fi
@@ -28,15 +37,30 @@ fi
 
 # fix permissions (ignore contents of workspace)
 PUID=${PUID:-911}
+echo "[$(date)] Checking ownership of files..."
+echo "[$(date)] Expected PUID: ${PUID}"
+echo "[$(date)] Current ownership of /config/.profile: $(stat -c %u /config/.profile)"
+
 if [[ ! "$(stat -c %u /config/.profile)" == "${PUID}" ]]; then
-    echo "Change in ownership or new install detected, please be patient while we chown existing files"
-    echo "This could take some time"
+    echo "[$(date)] Change in ownership detected, updating file permissions..."
+    echo "[$(date)] This could take some time"
     find /config -path "/config/workspace" -prune -o -exec lsiown abc:abc {} +
     lsiown abc:abc /config/workspace
+    lsiown -R abc:abc /workspace
 fi
+
+echo "[$(date)] Setting SSH directory permissions..."
 chmod 700 /config/.ssh
 if [[ -n "$(ls -A /config/.ssh)" ]]; then
     find /config/.ssh/ -type d -exec chmod 700 '{}' \;
     find /config/.ssh/ -type f -exec chmod 600 '{}' \;
     find /config/.ssh/ -type f -iname '*.pub' -exec chmod 644 '{}' \;
 fi
+
+echo "[$(date)] Final permission check..."
+echo "Config directory permissions:"
+ls -la /config/
+echo "Workspace directory permissions:"
+ls -la /workspace/
+
+echo "[$(date)] Initialization complete."
