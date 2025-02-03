@@ -1,78 +1,76 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-mkdir -p /config/logs
-exec 1> >(tee -a /config/logs/code-server.log)
-exec 2> >(tee -a /config/logs/code-server.log >&2)
-
-echo "[$(date)] Starting code-server service"
+echo "[$(date)] Starting code-server service" >&2
 
 # Check if code-server binary exists
 if [[ ! -f /app/code-server/bin/code-server ]]; then
-    echo "[$(date)] ERROR: code-server binary not found at /app/code-server/bin/code-server"
+    echo "[$(date)] ERROR: code-server binary not found at /app/code-server/bin/code-server" >&2
+    sleep 2
     exit 1
 fi
 
 # Check if config directories exist and are writable
 for dir in "/config/data" "/config/extensions" "/workspace"; do
     if [[ ! -d "$dir" ]]; then
-        echo "[$(date)] ERROR: Directory $dir does not exist"
+        echo "[$(date)] ERROR: Directory $dir does not exist" >&2
+        sleep 2
         exit 1
     fi
     if [[ ! -w "$dir" ]]; then
-        echo "[$(date)] ERROR: Directory $dir is not writable"
-        ls -la "$dir"
+        echo "[$(date)] ERROR: Directory $dir is not writable" >&2
+        ls -la "$dir" >&2
+        sleep 2
         exit 1
     fi
 done
 
 if [[ -n "${PASSWORD}" ]] || [[ -n "${HASHED_PASSWORD}" ]]; then
     AUTH="password"
-    echo "[$(date)] Authentication mode: password"
+    echo "[$(date)] Authentication mode: password" >&2
 else
     AUTH="none"
-    echo "[$(date)] Starting with no password"
+    echo "[$(date)] Starting with no password" >&2
 fi
 
 if [[ -z ${PROXY_DOMAIN+x} ]]; then
     PROXY_DOMAIN_ARG=""
-    echo "[$(date)] No proxy domain configured"
+    echo "[$(date)] No proxy domain configured" >&2
 else
     PROXY_DOMAIN_ARG="--proxy-domain=${PROXY_DOMAIN}"
-    echo "[$(date)] Using proxy domain: ${PROXY_DOMAIN}"
+    echo "[$(date)] Using proxy domain: ${PROXY_DOMAIN}" >&2
 fi
 
-echo "[$(date)] System Information:"
-echo "User running process: $(whoami)"
-echo "Current working directory: $(pwd)"
-echo "Directory permissions:"
-ls -la /config/
-ls -la /workspace/
+echo "[$(date)] System Information:" >&2
+echo "User running process: $(whoami)" >&2
+echo "Current working directory: $(pwd)" >&2
+echo "Directory permissions:" >&2
+ls -la /config/ >&2
+ls -la /workspace/ >&2
 
-echo "[$(date)] Starting code-server with following configuration:"
-echo "- Bind address: 0.0.0.0:8443"
-echo "- User data dir: /config/data"
-echo "- Extensions dir: /config/extensions"
-echo "- Auth mode: ${AUTH}"
-echo "- Proxy domain arg: ${PROXY_DOMAIN_ARG}"
-echo "- Default workspace: ${DEFAULT_WORKSPACE:-/config/workspace}"
+echo "[$(date)] Starting code-server with following configuration:" >&2
+echo "- Bind address: 0.0.0.0:8443" >&2
+echo "- User data dir: /config/data" >&2
+echo "- Extensions dir: /config/extensions" >&2
+echo "- Auth mode: ${AUTH}" >&2
+echo "- Proxy domain arg: ${PROXY_DOMAIN_ARG}" >&2
+echo "- Default workspace: ${DEFAULT_WORKSPACE:-/config/workspace}" >&2
 
 # Test if port is already in use
 if nc -z 127.0.0.1 8443 2>/dev/null; then
-    echo "[$(date)] ERROR: Port 8443 is already in use"
-    netstat -tulpn | grep 8443
+    echo "[$(date)] ERROR: Port 8443 is already in use" >&2
+    netstat -tulpn | grep 8443 >&2
+    sleep 2
     exit 1
 fi
 
-exec \
-    s6-notifyoncheck -d -n 300 -w 1000 -c "nc -z 127.0.0.1 8443" \
-        s6-setuidgid abc \
-            /app/code-server/bin/code-server \
-                --bind-addr 0.0.0.0:8443 \
-                --user-data-dir /config/data \
-                --extensions-dir /config/extensions \
-                --disable-telemetry \
-                --auth "${AUTH}" \
-                --verbose \
-                "${PROXY_DOMAIN_ARG}" \
-                "${DEFAULT_WORKSPACE:-/config/workspace}"
+exec s6-setuidgid abc \
+    /app/code-server/bin/code-server \
+        --bind-addr 0.0.0.0:8443 \
+        --user-data-dir /config/data \
+        --extensions-dir /config/extensions \
+        --disable-telemetry \
+        --auth "${AUTH}" \
+        --verbose \
+        "${PROXY_DOMAIN_ARG}" \
+        "${DEFAULT_WORKSPACE:-/config/workspace}"

@@ -1,92 +1,98 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-mkdir -p /config/logs
-exec 1> >(tee -a /config/logs/init.log)
-exec 2> >(tee -a /config/logs/init.log >&2)
+echo "[$(date)] Starting initialization..." >&2
+echo "[$(date)] Running as user: $(whoami)" >&2
+echo "[$(date)] Current directory: $(pwd)" >&2
 
-echo "[$(date)] Starting initialization..."
-echo "[$(date)] Running as user: $(whoami)"
-echo "[$(date)] Current directory: $(pwd)"
-
-echo "[$(date)] Creating required directories..."
+echo "[$(date)] Creating required directories..." >&2
 for dir in "/config/extensions" "/config/data" "/config/workspace" "/config/.ssh" "/workspace"; do
     if ! mkdir -p "$dir"; then
-        echo "[$(date)] ERROR: Failed to create directory: $dir"
+        echo "[$(date)] ERROR: Failed to create directory: $dir" >&2
+        sleep 2
         exit 1
     fi
 done
 
-echo "[$(date)] Setting up sudo access if configured..."
+echo "[$(date)] Setting up sudo access if configured..." >&2
 if [[ -n "${SUDO_PASSWORD}" ]] || [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
-    echo "[$(date)] Setting up sudo access"
+    echo "[$(date)] Setting up sudo access" >&2
     if ! grep -q 'abc' /etc/sudoers; then
-        echo "[$(date)] Adding abc to sudoers"
+        echo "[$(date)] Adding abc to sudoers" >&2
         if ! echo "abc ALL=(ALL:ALL) ALL" >> /etc/sudoers; then
-            echo "[$(date)] ERROR: Failed to modify sudoers file"
+            echo "[$(date)] ERROR: Failed to modify sudoers file" >&2
+            sleep 2
             exit 1
         fi
     fi
     if [[ -n "${SUDO_PASSWORD_HASH}" ]]; then
-        echo "[$(date)] Setting sudo password using sudo password hash"
+        echo "[$(date)] Setting sudo password using sudo password hash" >&2
         if ! sed -i "s|^abc:\!:|abc:${SUDO_PASSWORD_HASH}:|" /etc/shadow; then
-            echo "[$(date)] ERROR: Failed to set password hash"
+            echo "[$(date)] ERROR: Failed to set password hash" >&2
+            sleep 2
             exit 1
         fi
     else
-        echo "[$(date)] Setting sudo password using SUDO_PASSWORD env var"
+        echo "[$(date)] Setting sudo password using SUDO_PASSWORD env var" >&2
         if ! echo -e "${SUDO_PASSWORD}\n${SUDO_PASSWORD}" | passwd abc; then
-            echo "[$(date)] ERROR: Failed to set password"
+            echo "[$(date)] ERROR: Failed to set password" >&2
+            sleep 2
             exit 1
         fi
     fi
 fi
 
-echo "[$(date)] Setting up shell configuration..."
+echo "[$(date)] Setting up shell configuration..." >&2
 if [[ ! -f /config/.bashrc ]]; then
     if ! cp /root/.bashrc /config/.bashrc; then
-        echo "[$(date)] ERROR: Failed to copy .bashrc"
+        echo "[$(date)] ERROR: Failed to copy .bashrc" >&2
+        sleep 2
         exit 1
     fi
 fi
 
 if [[ ! -f /config/.profile ]]; then
     if ! cp /root/.profile /config/.profile; then
-        echo "[$(date)] ERROR: Failed to copy .profile"
+        echo "[$(date)] ERROR: Failed to copy .profile" >&2
+        sleep 2
         exit 1
     fi
 fi
 
 # fix permissions
 PUID=${PUID:-911}
-echo "[$(date)] Checking ownership of files..."
-echo "[$(date)] Expected PUID: ${PUID}"
-echo "[$(date)] Current ownership of /config/.profile: $(stat -c %u /config/.profile)"
+echo "[$(date)] Checking ownership of files..." >&2
+echo "[$(date)] Expected PUID: ${PUID}" >&2
+echo "[$(date)] Current ownership of /config/.profile: $(stat -c %u /config/.profile)" >&2
 
 if [[ ! "$(stat -c %u /config/.profile)" == "${PUID}" ]]; then
-    echo "[$(date)] Change in ownership detected, updating file permissions..."
-    echo "[$(date)] This could take some time"
+    echo "[$(date)] Change in ownership detected, updating file permissions..." >&2
+    echo "[$(date)] This could take some time" >&2
     
     # Set ownership of config directory
     if ! find /config -path "/config/workspace" -prune -o -exec lsiown abc:abc {} +; then
-        echo "[$(date)] ERROR: Failed to set ownership of config files"
+        echo "[$(date)] ERROR: Failed to set ownership of config files" >&2
+        sleep 2
         exit 1
     fi
     
     # Set ownership of workspace directories
     if ! lsiown abc:abc /config/workspace; then
-        echo "[$(date)] ERROR: Failed to set ownership of config workspace"
+        echo "[$(date)] ERROR: Failed to set ownership of config workspace" >&2
+        sleep 2
         exit 1
     fi
     if ! lsiown -R abc:abc /workspace; then
-        echo "[$(date)] ERROR: Failed to set ownership of workspace"
+        echo "[$(date)] ERROR: Failed to set ownership of workspace" >&2
+        sleep 2
         exit 1
     fi
 fi
 
-echo "[$(date)] Setting SSH directory permissions..."
+echo "[$(date)] Setting SSH directory permissions..." >&2
 if ! chmod 700 /config/.ssh; then
-    echo "[$(date)] ERROR: Failed to set SSH directory permissions"
+    echo "[$(date)] ERROR: Failed to set SSH directory permissions" >&2
+    sleep 2
     exit 1
 fi
 
@@ -94,24 +100,36 @@ if [[ -n "$(ls -A /config/.ssh)" ]]; then
     if ! find /config/.ssh/ -type d -exec chmod 700 '{}' \; || \
        ! find /config/.ssh/ -type f -exec chmod 600 '{}' \; || \
        ! find /config/.ssh/ -type f -iname '*.pub' -exec chmod 644 '{}' \;; then
-        echo "[$(date)] ERROR: Failed to set SSH file permissions"
+        echo "[$(date)] ERROR: Failed to set SSH file permissions" >&2
+        sleep 2
         exit 1
     fi
 fi
 
-echo "[$(date)] Final permission check..."
-echo "Config directory permissions:"
-ls -la /config/
-echo "Workspace directory permissions:"
-ls -la /workspace/
+echo "[$(date)] Final permission check..." >&2
+echo "Config directory permissions:" >&2
+ls -la /config/ >&2
+echo "Workspace directory permissions:" >&2
+ls -la /workspace/ >&2
 
-echo "[$(date)] Environment variables:"
-env | grep -v PASSWORD
+echo "[$(date)] Environment variables:" >&2
+env | grep -v PASSWORD >&2
 
-echo "[$(date)] Disk space:"
-df -h
+echo "[$(date)] Disk space:" >&2
+df -h >&2
 
-echo "[$(date)] Memory usage:"
-free -h
+echo "[$(date)] Memory usage:" >&2
+free -h >&2
 
-echo "[$(date)] Initialization complete."
+echo "[$(date)] Checking code-server binary..." >&2
+if [[ ! -f /app/code-server/bin/code-server ]]; then
+    echo "[$(date)] ERROR: code-server binary not found!" >&2
+    ls -la /app/code-server/bin/ >&2
+    sleep 2
+    exit 1
+fi
+
+echo "[$(date)] Checking code-server binary permissions..." >&2
+ls -la /app/code-server/bin/code-server >&2
+
+echo "[$(date)] Initialization complete." >&2
