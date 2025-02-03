@@ -75,7 +75,7 @@ jobs:
           file: Dockerfile.aarch64
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}-aarch64
+          tags: ${{ steps.meta.outputs.tags }}-build-aarch64
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -87,7 +87,23 @@ jobs:
           file: Dockerfile.armv7
           platforms: linux/arm/v7
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}-armv7
+          tags: ${{ steps.meta.outputs.tags }}-build-armv7
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Create and push manifest
+        if: github.event_name != 'pull_request'
+        run: |
+          for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr '\n' ' '); do
+            # Create manifest list
+            docker buildx imagetools create -t ${tag} \
+              ${tag}-amd64 \
+              ${tag}-build-aarch64 \
+              ${tag}-build-armv7
+
+            # Remove build tags
+            docker buildx imagetools rm ${tag}-amd64
+            docker buildx imagetools rm ${tag}-build-aarch64
+            docker buildx imagetools rm ${tag}-build-armv7
+          done

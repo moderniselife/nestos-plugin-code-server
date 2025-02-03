@@ -1,0 +1,20 @@
+version: "3"
+services:
+  code-server:
+    image: ghcr.io/moderniselife/nestos-plugin-code-server:latest
+    container_name: vscode-server
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Etc/UTC}
+      - PASSWORD=${PASSWORD}
+      - PROXY_DOMAIN=${DOMAIN}
+      - DEFAULT_WORKSPACE=/workspace
+    volumes:
+      - ${DATA_DIR:-/var/lib/nestos/plugins/vscode-server}/config:/config
+      - ${DATA_DIR:-/var/lib/nestos/plugins/vscode-server}/data:/workspace
+    ports:
+      - "${PORT:-8200}:8080"
+    networks:
+      - nestos
