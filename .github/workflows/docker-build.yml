@@ -5,16 +5,16 @@ on:
     branches:
       - master
     paths:
-      - 'Dockerfile*'
-      - 'root/**'
-      - '.github/workflows/docker-build.yml'
+      - "Dockerfile*"
+      - "root/**"
+      - ".github/workflows/docker-build.yml"
   pull_request:
     branches:
       - master
     paths:
-      - 'Dockerfile*'
-      - 'root/**'
-      - '.github/workflows/docker-build.yml'
+      - "Dockerfile*"
+      - "root/**"
+      - ".github/workflows/docker-build.yml"
 
 env:
   REGISTRY: ghcr.io
@@ -55,6 +55,18 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
+
+      - name: Build and push amd64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}-amd64
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push aarch64
         uses: docker/build-push-action@v5
