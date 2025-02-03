@@ -15,6 +15,6 @@ services:
       - ${DATA_DIR:-/var/lib/nestos/plugins/vscode-server}/config:/config
       - ${DATA_DIR:-/var/lib/nestos/plugins/vscode-server}/data:/workspace
     ports:
-      - "${PORT:-8200}:8080"
+      - "${PORT:-8200}:8443"
     networks:
       - nestos
